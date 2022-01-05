@@ -73,12 +73,16 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size,
 
 #elif defined(_WIN32)
 #define USE_PTHREAD_API 0
+#include <windows.h>
 #include <processthreadsapi.h>
 #include <winbase.h>
+#include <aclapi.h>
 #endif
 
 void make_thread_realtime(std::thread::native_handle_type handle) {
-    static unsigned core = 0;
+    // Start with last core as the first one might be used for kernel stuff by
+    // the OS (at least on Windows)
+    static unsigned core = std::thread::hardware_concurrency();
 #if USE_PTHREAD_API
     // Enable SCHED_FIFO RT scheduler and set maximum priority
     struct sched_param sched_params = {.sched_priority = 99};
@@ -90,21 +94,36 @@ void make_thread_realtime(std::thread::native_handle_type handle) {
     // Pin the thread to a core
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
-    CPU_SET(core, &cpuset);
+    CPU_SET(core - 1, &cpuset);
 
     if (pthread_setaffinity_np(handle, sizeof(cpu_set_t), &cpuset) != 0) {
         throw std::system_error(errno, std::system_category(),
                                 std::strerror(errno));
     }
 #else
+    HANDLE h_proces = GetCurrentProcess();
+    if (SetSecurityInfo(h_proces, SE_KERNEL_OBJECT, PROCESS_SET_INFORMATION,
+                        nullptr, nullptr, nullptr, nullptr) != ERROR_SUCCESS) {
+        throw std::runtime_error{"Failed to set PROCESS_SET_INFORMATION "};
+    }
+
     // Set the thread to be RT with maximum priority
-    SetPriorityClass(handle, REALTIME_PRIORITY_CLASS);
-    SetThreadPriority(handle, THREAD_PRIORITY_TIME_CRITICAL);
+    if (SetPriorityClass(h_proces, REALTIME_PRIORITY_CLASS) == 0) {
+        throw std::runtime_error{"Failed to set REALTIME_PRIORITY_CLASS"};
+    }
+    if (SetThreadPriority(handle, THREAD_PRIORITY_TIME_CRITICAL) == 0) {
+        throw std::runtime_error{"Failed to set THREAD_PRIORITY_TIME_CRITICAL"};
+    }
 
     // Pin the thread to a core
-    SetThreadAffinityMask(handle, 1 << core);
+    if (SetThreadAffinityMask(handle, 1 << (core - 1)) == 0) {
+        throw std::runtime_error{"Failed to set thread affinity mask"};
+    }
 #endif
 
     // Next call to this function will pin the thread to the next core
-    core = (core + 1) % std::thread::hardware_concurrency();
+    --core;
+    if (core == 0) {
+        core = std::thread::hardware_concurrency();
+    }
 }

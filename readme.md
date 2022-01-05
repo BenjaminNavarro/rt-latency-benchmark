@@ -28,6 +28,8 @@ cmake -DCMAKE_MODULE_PATH=`pwd` -DCMAKE_BUILD_TYPE=Release ..
 cmake --build .
 ```
 
+Note: On Windows you might need to pass also `-s compiler.cppstd=17 -s compiler.runtime=dynamic` (or similar) to the `conan install` command.
+
 This will create an `rtbench` executable in the `build` folder
 
 # Using rtbench

@@ -37,11 +37,16 @@ int main(int argc, const char* argv[]) {
     fmt::print("    realtime: {}\n", realtime);
 
     if (realtime) {
+        try {
 #if USE_PTHREAD_API
-        make_thread_realtime(pthread_self());
+            make_thread_realtime(pthread_self());
 #else
-        make_thread_realtime(GetCurrentThread());
+            make_thread_realtime(GetCurrentThread());
 #endif
+        } catch (const std::exception& e) {
+            fmt::print(stderr, "Failed to make thread realtime: {}\n", e.what());
+            std::exit(1);
+        }
     }
 
     using clock = std::chrono::steady_clock;

@@ -28,3 +28,12 @@ target_compile_features(
     PRIVATE
         cxx_std_17
 )
+
+if(MSVC)
+    target_compile_options(
+        rtbench
+        PRIVATE
+            /EHsc
+            /permissive-
+    )
+endif(MSVC)
