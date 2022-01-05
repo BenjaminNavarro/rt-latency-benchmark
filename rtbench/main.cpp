@@ -29,6 +29,10 @@ int main(int argc, const char* argv[]) {
             "Whether or not configuring the thread for realtime execution ({})",
             realtime));
 
+    bool spin{false};
+    cli.add_option("-s,--spin", spin,
+                   fmt::format("Spin instead of waiting ({})", spin));
+
     CLI11_PARSE(cli, argc, argv);
 
     fmt::print("Running with the following options:\n");
@@ -56,7 +60,12 @@ int main(int argc, const char* argv[]) {
     const auto start = clock::now();
     for (size_t i = 0; i < loops; i++) {
         timestamps[i] = clock::now();
-        std::this_thread::sleep_until(start + (i + 1) * duration{period_ms});
+        if (spin) {
+            while (clock::now() < start + (i + 1) * duration{period_ms}) {
+            }
+        } else {
+            std::this_thread::sleep_until(start + (i + 1) * duration{period_ms});
+        }
     }
 
     std::vector<duration> diffs;
